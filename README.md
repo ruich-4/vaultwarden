@@ -10,7 +10,8 @@
 
 ## 准备
 
-- 仅支持 Debian 12/13，需要能访问 Debian 和 Docker 软件源。脚本启动时检查 Docker Engine、Compose 插件、OpenSSL、解压工具及所需基础命令，缺失时自动通过 APT 安装；Docker 软件包按需使用官方源。
+- 仅支持 Debian 12/13，需要能访问软件源。脚本启动时检查 Docker Engine、Compose 插件、OpenSSL、解压工具及所需基础命令，缺失时自动通过 APT 安装。
+- 安装依赖时优先使用清华 TUNA 的 Debian 和 Docker CE 镜像：替换已配置的官方源地址，保留其他自定义镜像，原文件备份为 `.vaultwarden.bak`；新增 Docker 源也使用 TUNA。Docker 签名密钥优先从 TUNA 下载，失败时尝试官方地址。
 - 以下操作建议在 root shell 中执行。普通用户运行脚本时会自动通过 `sudo` 提权；没有 `sudo` 时需切换到 root。已有可用依赖不会重复安装；Docker 未运行时尝试启动，检查失败则停止。
 - 准备域名，将 DNS 的 A 记录指向服务器；如设置 AAAA 记录，IPv6 也必须可达。
 - 确保主机的 TCP 80、443 端口空闲，并在防火墙和云安全组中开放。UDP 443 用于 HTTP/3，可选开放。
@@ -110,6 +111,8 @@ docker compose logs --tail=100 caddy
 `.env` 已列入 Git 忽略规则。不要将真实凭据、数据库备份或导出的密码库提交到仓库。
 
 ## 验证范围
+
+已在干净的 Debian 12/13 容器中验证缺失依赖自动安装、配置生成和重复执行不再安装。测试通过挂载现有 Docker socket 验证连接可用；服务启动成功、失败及启动后仍不可用的分支使用模拟验证，未验证全新宿主机的 Docker 守护进程启动。
 
 已使用上述镜像在隔离的本地 Compose 项目中验证数据库初始化、Vaultwarden 数据库迁移、服务健康检查，以及经 Caddy 代理的 `/alive` 响应。Caddy 配置通过校验。
 

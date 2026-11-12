@@ -23,7 +23,7 @@ check_environment() {
     for dependency in openssl:openssl tar:tar gzip:gzip unzip:unzip curl:curl \
         awk:mawk find:findutils grep:grep sed:sed head:coreutils \
         mktemp:coreutils dirname:coreutils ln:coreutils rm:coreutils \
-        install:coreutils chmod:coreutils cat:coreutils; do
+        install:coreutils chmod:coreutils cat:coreutils cp:coreutils; do
         command -v "${dependency%%:*}" >/dev/null 2>&1 || packages="$packages ${dependency#*:}"
     done
     if [ "$(dpkg-query -W -f='${Status}' ca-certificates 2>/dev/null || true)" != 'install ok installed' ]; then
@@ -40,6 +40,18 @@ check_environment() {
     fi
 
     if [ -n "$packages$docker_packages" ]; then
+        mirror=https://mirrors.tuna.tsinghua.edu.cn
+        # Keep suites, components and custom mirrors; support both APT source formats.
+        for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            [ -f "$source" ] || continue
+            if grep -Eq 'https?://(deb\.debian\.org|security\.debian\.org|download\.docker\.com)/' "$source"; then
+                [ -e "$source.vaultwarden.bak" ] || cp -p -- "$source" "$source.vaultwarden.bak"
+                # Preserve HTTP for Debian's initial CA-certificate bootstrap.
+                sed -i -E \
+                    -e "s#(https?://)(deb\\.debian\\.org|security\\.debian\\.org)/#\\1${mirror#https://}/#g" \
+                    -e "s#https?://download\\.docker\\.com/#$mirror/docker-ce/#g" "$source"
+            fi
+        done
         apt-get update || fail 'APT 软件源更新失败。'
         if [ -n "$packages" ]; then
             # Package names come only from the fixed dependency list above.
@@ -52,11 +64,12 @@ check_environment() {
             done
             if [ "$need_docker_repo" = true ]; then
                 install -m 0755 -d /etc/apt/keyrings
-                curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc || fail 'Docker 软件源密钥下载失败。'
+                curl -fsSL --connect-timeout 10 --max-time 60 "$mirror/docker-ce/linux/debian/gpg" -o /etc/apt/keyrings/docker.asc || \
+                    curl -fsSL --connect-timeout 10 --max-time 60 https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc || fail 'Docker 软件源密钥下载失败。'
                 chmod 0644 /etc/apt/keyrings/docker.asc
                 cat > /etc/apt/sources.list.d/docker.sources <<EOF
 Types: deb
-URIs: https://download.docker.com/linux/debian
+URIs: $mirror/docker-ce/linux/debian
 Suites: $VERSION_CODENAME
 Components: stable
 Architectures: $(dpkg --print-architecture)
