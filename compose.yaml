@@ -1,0 +1,81 @@
+services:
+  caddy:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    environment:
+      VAULT_DOMAIN: ${VAULT_DOMAIN:?Set VAULT_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+    depends_on:
+      vaultwarden:
+        condition: service_healthy
+
+  vaultwarden:
+    image: vaultwarden/server:1.37.5-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: https://${VAULT_DOMAIN:?Set VAULT_DOMAIN in .env}
+      DATABASE_URL: postgresql://vaultwarden:${VAULT_DB_PASSWORD:?Set VAULT_DB_PASSWORD in .env}@postgres:5432/vaultwarden
+      SIGNUPS_ALLOWED: ${SIGNUPS_ALLOWED:-false}
+      IP_HEADER: X-Real-IP
+      # Uncomment this block after filling in SMTP settings in .env.
+      # Empty SMTP_HOST/SMTP_FROM values prevent Vaultwarden from starting.
+      # SMTP_HOST: ${SMTP_HOST:?Set SMTP_HOST in .env}
+      # SMTP_PORT: ${SMTP_PORT:-587}
+      # SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      # SMTP_FROM: ${SMTP_FROM:?Set SMTP_FROM in .env}
+      # SMTP_USERNAME: ${SMTP_USERNAME:?Set SMTP_USERNAME in .env}
+      # SMTP_PASSWORD: ${SMTP_PASSWORD:?Set SMTP_PASSWORD in .env}
+    volumes:
+      - vaultwarden_data:/data
+    networks:
+      - web
+      - database
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  postgres:
+    image: postgres:17.11-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      VAULT_DB_PASSWORD: ${VAULT_DB_PASSWORD:?Set VAULT_DB_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/10-vaultwarden.sh:ro
+    networks:
+      - database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d vaultwarden"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+networks:
+  web:
+  database:
+    internal: true
+
+volumes:
+  caddy_data:
+  caddy_config:
+  vaultwarden_data:
+  postgres_data:
