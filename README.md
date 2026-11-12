@@ -26,9 +26,9 @@ cd vaultwarden
 ./setup.sh
 ```
 
-选择 `1) 生成 .env 配置`，再按提示输入域名，例如 `vault.example.com`；也可以直接运行 `./setup.sh vault.example.com`。
+选择 `1) 生成 .env 配置`，再按提示输入域名，例如 `vault.example.com`。
 
-`setup.sh` 是唯一 Shell 入口。不带参数运行时显示选项菜单：`1` 生成配置、`2` 导入备份、`0` 退出；也保留域名参数和 `import-db` 子命令用法。
+`setup.sh` 是唯一 Shell 入口，只通过交互菜单操作：`1` 生成配置、`2` 导入备份、`0` 退出，不接受命令行参数。
 
 脚本生成一个 32 字节随机数据库密码，以十六进制写入 `.env`，文件权限为 `600`。密码不在终端显示；已有 `.env` 时拒绝覆盖，不会改变现有数据库密码。
 
@@ -50,12 +50,7 @@ docker compose up -d vaultwarden
 
 先通过选项 `1` 生成配置，将 `.gz`、`.tar.gz`、`.zip` 或 `.tar` 备份放在运行命令时的当前目录，再运行 `./setup.sh`，选择 `2) 导入 PostgreSQL 备份`。脚本自动解压到临时目录，递归查找其中的 `.sql` 或 `.dump` 并导入，无需输入路径；只取找到的第一个压缩包和备份文件，退出时清理临时文件，保留原压缩包。单文件 `.gz` 解压后按内容识别 SQL/custom 格式。
 
-请在首次启动 Vaultwarden **之前**导入。对于未压缩的备份，也可以直接执行：
-
-```sh
-./setup.sh import-db /路径/vaultwarden.dump
-# 或：./setup.sh import-db /路径/vaultwarden.sql
-```
+请在首次启动 Vaultwarden **之前**导入。
 
 脚本自动启动 PostgreSQL 并等待就绪，从文件内容识别格式，用 `vaultwarden` 数据库账户导入。目标数据库必须为空，Vaultwarden 必须停止；脚本不会清空已有数据，也不会自动启动应用。
 

@@ -16,7 +16,7 @@ check_environment() {
     esac
     if [ "$(id -u)" -ne 0 ]; then
         command -v sudo >/dev/null 2>&1 || fail '请以 root 用户运行；当前用户没有 sudo。'
-        exec sudo -- sh "$0" "$@"
+        exec sudo -- sh "$0"
     fi
 
     packages=
@@ -96,7 +96,6 @@ EOF
 }
 
 import_db() {
-    [ "$#" -eq 1 ] || fail "用法：$0 import-db /路径/vaultwarden.sql 或 /路径/vaultwarden.dump"
     backup=$1
     [ -f "$backup" ] && [ -r "$backup" ] && [ -s "$backup" ] || fail '备份文件不存在、不可读或为空。'
     case "$backup" in
@@ -175,39 +174,28 @@ import_archive() {
     import_db "$backup_path"
 }
 
-check_environment "$@"
+[ "$#" -eq 0 ] || fail "用法：$0（不带参数，通过菜单操作）"
+check_environment
 
-if [ "$#" -eq 0 ]; then
-    printf '%s\n' '1) 生成 .env 配置' '2) 导入 PostgreSQL 备份' '0) 退出'
-    printf '请选择 [0-2]：'
-    IFS= read -r choice || fail '未读取到选项。'
-    case "$choice" in
-        1) ;;
-        2)
-            import_archive
-            exit 0
-            ;;
-        0) exit 0 ;;
-        *) fail '无效选项，请输入 0、1 或 2。' ;;
-    esac
-fi
-
-if [ "${1-}" = import-db ]; then
-    shift
-    import_db "$@"
-    exit 0
-fi
+printf '%s\n' '1) 生成 .env 配置' '2) 导入 PostgreSQL 备份' '0) 退出'
+printf '请选择 [0-2]：'
+IFS= read -r choice || fail '未读取到选项。'
+case "$choice" in
+    1) ;;
+    2)
+        import_archive
+        exit 0
+        ;;
+    0) exit 0 ;;
+    *) fail '无效选项，请输入 0、1 或 2。' ;;
+esac
 
 umask 077
-[ "$#" -le 1 ] || fail "用法：$0 [域名]"
 CDPATH= cd -- "$(dirname -- "$0")"
 [ ! -e .env ] && [ ! -L .env ] || fail '已存在 .env，保留原配置，不重新生成密码。'
 
-domain=${1-}
-if [ "$#" -eq 0 ]; then
-    printf '请输入域名（例如 vault.example.com）：'
-    IFS= read -r domain || fail '未读取到域名。'
-fi
+printf '请输入域名（例如 vault.example.com）：'
+IFS= read -r domain || fail '未读取到域名。'
 
 printf '%s\n' "$domain" | LC_ALL=C awk -F. '
     NR != 1 || length($0) > 253 || NF < 2 { exit 1 }
@@ -232,5 +220,5 @@ sed -e "s/^VAULT_DOMAIN=.*/VAULT_DOMAIN=$domain/" \
 ln -T -- "$tmp" .env || fail '无法创建 .env，已有配置未被覆盖。'
 
 printf '%s\n' '已生成 .env（权限 600），数据库密码已保存，不在终端显示。' \
-    '迁移旧数据：先运行 ./setup.sh import-db /路径/备份.dump，再启动服务。' \
+    '迁移旧数据：将备份压缩包放在当前目录，再运行 ./setup.sh 选择 2 导入，之后启动服务。' \
     '新建账户：运行 SIGNUPS_ALLOWED=true docker compose up -d；注册后运行 docker compose up -d vaultwarden 关闭注册。'
