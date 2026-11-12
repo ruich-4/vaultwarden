@@ -23,7 +23,7 @@ check_environment() {
     for dependency in openssl:openssl tar:tar gzip:gzip unzip:unzip curl:curl \
         awk:mawk find:findutils grep:grep sed:sed head:coreutils \
         mktemp:coreutils dirname:coreutils ln:coreutils rm:coreutils \
-        install:coreutils chmod:coreutils; do
+        install:coreutils chmod:coreutils cat:coreutils; do
         command -v "${dependency%%:*}" >/dev/null 2>&1 || packages="$packages ${dependency#*:}"
     done
     if [ "$(dpkg-query -W -f='${Status}' ca-certificates 2>/dev/null || true)" != 'install ok installed' ]; then
