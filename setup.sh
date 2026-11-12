@@ -55,6 +55,55 @@ import_db() {
         '确认数据文件就绪后，执行 docker compose up -d 启动服务。'
 }
 
+import_archive() {
+    archive=
+    for file in ./*.tar.gz ./*.gz ./*.zip ./*.tar; do
+        [ -f "$file" ] || continue
+        archive=$file
+        break
+    done
+    [ -n "$archive" ] || fail '当前目录未找到 .gz、.tar.gz、.zip 或 .tar 压缩包。'
+
+    umask 077
+    archive_tmp=$(mktemp -d)
+    trap 'rm -rf -- "$archive_tmp"' 0
+    trap 'exit 1' HUP INT TERM
+    printf '正在解压：%s\n' "$archive"
+    case "$archive" in
+        *.tar.gz|*.tar)
+            command -v tar >/dev/null 2>&1 || fail '需要 tar，请先安装。'
+            tar --no-same-owner --no-same-permissions -xf "$archive" -C "$archive_tmp" || fail '压缩包解压失败。'
+            ;;
+        *.zip)
+            command -v unzip >/dev/null 2>&1 || fail '需要 unzip，请先安装。'
+            unzip -q "$archive" -d "$archive_tmp" || fail '压缩包解压失败。'
+            ;;
+        *.gz)
+            command -v gzip >/dev/null 2>&1 || fail '需要 gzip，请先安装。'
+            # A single gzip stream has no directory tree; import_db detects its SQL/custom contents.
+            gzip -dc -- "$archive" > "$archive_tmp/backup.dump" || fail '压缩包解压失败。'
+            ;;
+    esac
+    backup_path=$(find "$archive_tmp" -type f \( -iname '*.sql' -o -iname '*.dump' \) -print -quit)
+    [ -n "$backup_path" ] || fail '压缩包内未找到 .sql 或 .dump 备份。'
+    import_db "$backup_path"
+}
+
+if [ "$#" -eq 0 ]; then
+    printf '%s\n' '1) 生成 .env 配置' '2) 导入 PostgreSQL 备份' '0) 退出'
+    printf '请选择 [0-2]：'
+    IFS= read -r choice || fail '未读取到选项。'
+    case "$choice" in
+        1) ;;
+        2)
+            import_archive
+            exit 0
+            ;;
+        0) exit 0 ;;
+        *) fail '无效选项，请输入 0、1 或 2。' ;;
+    esac
+fi
+
 if [ "${1-}" = import-db ]; then
     shift
     import_db "$@"

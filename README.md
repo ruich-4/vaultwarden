@@ -11,12 +11,13 @@
 ## 准备
 
 - 安装 Docker Engine、Docker Compose 插件和 OpenSSL，在 Linux 上执行以下脚本。
+- 选项 `2` 解压备份需要对应的 `tar`、`gzip` 或 `unzip` 工具。
 - 准备域名，将 DNS 的 A 记录指向服务器；如设置 AAAA 记录，IPv6 也必须可达。
 - 确保主机的 TCP 80、443 端口空闲，并在防火墙和云安全组中开放。UDP 443 用于 HTTP/3，可选开放。
 
 此模板按域名直接访问 Caddy 配置。仅 Caddy 发布宿主机端口，Vaultwarden 和 PostgreSQL 通过 Docker 网络访问，PostgreSQL 所在网络设为 `internal`。
 
-## 初始化：只输入域名
+## 初始化配置
 
 ```sh
 git clone https://github.com/ruich-4/vaultwarden.git
@@ -24,9 +25,9 @@ cd vaultwarden
 ./setup.sh
 ```
 
-按提示输入域名，例如 `vault.example.com`；也可以直接运行 `./setup.sh vault.example.com`。
+选择 `1) 生成 .env 配置`，再按提示输入域名，例如 `vault.example.com`；也可以直接运行 `./setup.sh vault.example.com`。
 
-`setup.sh` 是唯一 Shell 入口，支持配置生成和 `import-db` 备份导入。
+`setup.sh` 是唯一 Shell 入口。不带参数运行时显示选项菜单：`1` 生成配置、`2` 导入备份、`0` 退出；也保留域名参数和 `import-db` 子命令用法。
 
 脚本生成一个 32 字节随机数据库密码，以十六进制写入 `.env`，文件权限为 `600`。密码不在终端显示；已有 `.env` 时拒绝覆盖，不会改变现有数据库密码。
 
@@ -46,7 +47,9 @@ docker compose up -d vaultwarden
 
 ## 导入 PostgreSQL 备份
 
-先运行 `setup.sh`，在首次启动 Vaultwarden **之前**导入：
+先通过选项 `1` 生成配置，将 `.gz`、`.tar.gz`、`.zip` 或 `.tar` 备份放在运行命令时的当前目录，再运行 `./setup.sh`，选择 `2) 导入 PostgreSQL 备份`。脚本自动解压到临时目录，递归查找其中的 `.sql` 或 `.dump` 并导入，无需输入路径；只取找到的第一个压缩包和备份文件，退出时清理临时文件，保留原压缩包。单文件 `.gz` 解压后按内容识别 SQL/custom 格式。
+
+请在首次启动 Vaultwarden **之前**导入。对于未压缩的备份，也可以直接执行：
 
 ```sh
 ./setup.sh import-db /路径/vaultwarden.dump
@@ -58,7 +61,7 @@ docker compose up -d vaultwarden
 支持 `pg_dump` 的完整单库备份：
 
 - 推荐 custom 格式（`pg_dump -Fc`），恢复时自动忽略原来的对象所有者和授权。
-- SQL 格式须通过 `pg_dump --no-owner --no-acl` 导出，不带 `--create`。不支持 `pg_dumpall`、SQLite、压缩包或自行编写的跨库/事务控制脚本。
+- SQL 格式须通过 `pg_dump --no-owner --no-acl` 导出，不带 `--create`。不支持 `pg_dumpall`、SQLite 或自行编写的跨库/事务控制脚本。
 - 使用不高于目标 PostgreSQL 主版本的兼容备份；本模板的导入工具为 PostgreSQL 18。
 - 导入按单个事务执行，遇到错误停止；兼容的 `pg_dump` 备份会回滚本次写入。
 
