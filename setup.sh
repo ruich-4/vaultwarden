@@ -6,6 +6,82 @@ fail() {
     exit 1
 }
 
+check_environment() {
+    [ -r /etc/os-release ] || fail '无法识别系统，仅支持 Debian 12/13。'
+    . /etc/os-release
+    [ "${ID-}" = debian ] || fail '仅支持 Debian 12/13。'
+    case "${VERSION_ID-}" in
+        12|13) ;;
+        *) fail '仅支持 Debian 12/13。' ;;
+    esac
+    if [ "$(id -u)" -ne 0 ]; then
+        command -v sudo >/dev/null 2>&1 || fail '请以 root 用户运行；当前用户没有 sudo。'
+        exec sudo -- sh "$0" "$@"
+    fi
+
+    packages=
+    for dependency in openssl:openssl tar:tar gzip:gzip unzip:unzip curl:curl \
+        awk:mawk find:findutils grep:grep sed:sed head:coreutils \
+        mktemp:coreutils dirname:coreutils ln:coreutils rm:coreutils \
+        install:coreutils chmod:coreutils; do
+        command -v "${dependency%%:*}" >/dev/null 2>&1 || packages="$packages ${dependency#*:}"
+    done
+    if [ "$(dpkg-query -W -f='${Status}' ca-certificates 2>/dev/null || true)" != 'install ok installed' ]; then
+        packages="$packages ca-certificates"
+    fi
+
+    docker_packages=
+    if ! command -v docker >/dev/null 2>&1 || \
+        { ! command -v dockerd >/dev/null 2>&1 && ! docker info >/dev/null 2>&1; }; then
+        docker_packages='docker-ce docker-ce-cli containerd.io'
+    fi
+    if ! docker compose version >/dev/null 2>&1; then
+        docker_packages="$docker_packages docker-compose-plugin"
+    fi
+
+    if [ -n "$packages$docker_packages" ]; then
+        apt-get update || fail 'APT 软件源更新失败。'
+        if [ -n "$packages" ]; then
+            # Package names come only from the fixed dependency list above.
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --no-remove $packages || fail '基础依赖安装失败。'
+        fi
+        if [ -n "$docker_packages" ]; then
+            need_docker_repo=false
+            for package in $docker_packages; do
+                apt-cache show "$package" >/dev/null 2>&1 || need_docker_repo=true
+            done
+            if [ "$need_docker_repo" = true ]; then
+                install -m 0755 -d /etc/apt/keyrings
+                curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc || fail 'Docker 软件源密钥下载失败。'
+                chmod 0644 /etc/apt/keyrings/docker.asc
+                cat > /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/debian
+Suites: $VERSION_CODENAME
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+                apt-get update || fail 'Docker 软件源更新失败。'
+            fi
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --no-remove $docker_packages || fail 'Docker/Compose 安装失败，请检查 APT 报错或已有软件包冲突。'
+        fi
+    fi
+
+    docker compose version >/dev/null 2>&1 || fail 'Docker Compose 插件不可用。'
+    if ! docker info >/dev/null 2>&1; then
+        if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
+            systemctl start docker || fail 'Docker 服务启动失败。'
+        elif command -v service >/dev/null 2>&1; then
+            service docker start || fail 'Docker 服务启动失败。'
+        else
+            fail '无法启动 Docker 服务，请检查系统服务管理器。'
+        fi
+        docker info >/dev/null 2>&1 || fail 'Docker 服务仍不可用，请检查服务状态及 Docker 连接配置。'
+    fi
+    printf '%s\n' '环境检查完成。'
+}
+
 import_db() {
     [ "$#" -eq 1 ] || fail "用法：$0 import-db /路径/vaultwarden.sql 或 /路径/vaultwarden.dump"
     backup=$1
@@ -71,15 +147,12 @@ import_archive() {
     printf '正在解压：%s\n' "$archive"
     case "$archive" in
         *.tar.gz|*.tar)
-            command -v tar >/dev/null 2>&1 || fail '需要 tar，请先安装。'
             tar --no-same-owner --no-same-permissions -xf "$archive" -C "$archive_tmp" || fail '压缩包解压失败。'
             ;;
         *.zip)
-            command -v unzip >/dev/null 2>&1 || fail '需要 unzip，请先安装。'
             unzip -q "$archive" -d "$archive_tmp" || fail '压缩包解压失败。'
             ;;
         *.gz)
-            command -v gzip >/dev/null 2>&1 || fail '需要 gzip，请先安装。'
             # A single gzip stream has no directory tree; import_db detects its SQL/custom contents.
             gzip -dc -- "$archive" > "$archive_tmp/backup.dump" || fail '压缩包解压失败。'
             ;;
@@ -88,6 +161,8 @@ import_archive() {
     [ -n "$backup_path" ] || fail '压缩包内未找到 .sql 或 .dump 备份。'
     import_db "$backup_path"
 }
+
+check_environment "$@"
 
 if [ "$#" -eq 0 ]; then
     printf '%s\n' '1) 生成 .env 配置' '2) 导入 PostgreSQL 备份' '0) 退出'
@@ -114,7 +189,6 @@ umask 077
 [ "$#" -le 1 ] || fail "用法：$0 [域名]"
 CDPATH= cd -- "$(dirname -- "$0")"
 [ ! -e .env ] && [ ! -L .env ] || fail '已存在 .env，保留原配置，不重新生成密码。'
-command -v openssl >/dev/null 2>&1 || fail '需要 openssl，请先安装。'
 
 domain=${1-}
 if [ "$#" -eq 0 ]; then

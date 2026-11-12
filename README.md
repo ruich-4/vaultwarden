@@ -10,8 +10,8 @@
 
 ## 准备
 
-- 安装 Docker Engine、Docker Compose 插件和 OpenSSL，在 Linux 上执行以下脚本。
-- 选项 `2` 解压备份需要对应的 `tar`、`gzip` 或 `unzip` 工具。
+- 仅支持 Debian 12/13，需要能访问 Debian 和 Docker 软件源。脚本启动时检查 Docker Engine、Compose 插件、OpenSSL、解压工具及所需基础命令，缺失时自动通过 APT 安装；Docker 软件包按需使用官方源。
+- 以下操作建议在 root shell 中执行。普通用户运行脚本时会自动通过 `sudo` 提权；没有 `sudo` 时需切换到 root。已有可用依赖不会重复安装；Docker 未运行时尝试启动，检查失败则停止。
 - 准备域名，将 DNS 的 A 记录指向服务器；如设置 AAAA 记录，IPv6 也必须可达。
 - 确保主机的 TCP 80、443 端口空闲，并在防火墙和云安全组中开放。UDP 443 用于 HTTP/3，可选开放。
 
