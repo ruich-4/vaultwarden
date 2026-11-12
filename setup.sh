@@ -40,7 +40,7 @@ check_environment() {
     fi
 
     if [ -n "$packages$docker_packages" ]; then
-        mirror=https://mirrors.tuna.tsinghua.edu.cn
+        mirror=https://mirrors.cernet.edu.cn
         # Keep suites, components and custom mirrors; support both APT source formats.
         for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
             [ -f "$source" ] || continue
@@ -48,7 +48,8 @@ check_environment() {
                 [ -e "$source.vaultwarden.bak" ] || cp -p -- "$source" "$source.vaultwarden.bak"
                 # Preserve HTTP for Debian's initial CA-certificate bootstrap.
                 sed -i -E \
-                    -e "s#(https?://)(deb\\.debian\\.org|security\\.debian\\.org)/#\\1${mirror#https://}/#g" \
+                    -e "s#(https?://)deb\\.debian\\.org/debian/?#\\1${mirror#https://}/debian/#g" \
+                    -e "s#(https?://)security\\.debian\\.org/debian-security/?#\\1${mirror#https://}/debian-security/#g" \
                     -e "s#https?://download\\.docker\\.com/#$mirror/docker-ce/#g" "$source"
             fi
         done

@@ -11,7 +11,7 @@
 ## 准备
 
 - 仅支持 Debian 12/13，需要能访问软件源。脚本启动时检查 Docker Engine、Compose 插件、OpenSSL、解压工具及所需基础命令，缺失时自动通过 APT 安装。
-- 安装依赖时优先使用清华 TUNA 的 Debian 和 Docker CE 镜像：替换已配置的官方源地址，保留其他自定义镜像，原文件备份为 `.vaultwarden.bak`；新增 Docker 源也使用 TUNA。Docker 签名密钥优先从 TUNA 下载，失败时尝试官方地址。
+- 安装依赖时优先使用教育网联合镜像站的 Debian 和 Docker CE 镜像：替换已配置的官方源地址，保留其他自定义镜像，原文件备份为 `.vaultwarden.bak`；新增 Docker 源也使用教育网联合镜像站。Docker 签名密钥优先从教育网联合镜像站下载，失败时尝试官方地址。
 - 以下操作建议在 root shell 中执行。普通用户运行脚本时会自动通过 `sudo` 提权；没有 `sudo` 时需切换到 root。已有可用依赖不会重复安装；Docker 未运行时尝试启动，检查失败则停止。
 - 准备域名，将 DNS 的 A 记录指向服务器；如设置 AAAA 记录，IPv6 也必须可达。
 - 确保主机的 TCP 80、443 端口空闲，并在防火墙和云安全组中开放。UDP 443 用于 HTTP/3，可选开放。
